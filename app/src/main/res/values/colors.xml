@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#0A0A0A</color>
+    <color name="surface">#111111</color>
+    <color name="accent">#C8F135</color>
+    <color name="text">#F0F0F0</color>
+    <color name="muted">#555555</color>
+    <color name="border">#222222</color>
+
+    <!-- Status colours -->
+    <color name="status_error">#FF4F4F</color>
+    <color name="status_success">#C8F135</color>
+    <color name="status_muted">#555555</color>
+</resources>
