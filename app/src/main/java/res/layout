@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg"
+    android:padding="28dp">
+
+    <!-- Title -->
+    <TextView
+        android:id="@+id/titleText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="AUDIO.FETCH"
+        android:textColor="@color/text"
+        android:textSize="32sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.04"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/subtitleText"
+        android:layout_marginBottom="4dp" />
+
+    <!-- Subtitle -->
+    <TextView
+        android:id="@+id/subtitleText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="// paste url → get audio. that's it."
+        android:textColor="@color/muted"
+        android:textSize="12sp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/titleText"
+        app:layout_constraintBottom_toTopOf="@id/urlInput"
+        android:layout_marginBottom="32dp" />
+
+    <!-- URL input -->
+    <EditText
+        android:id="@+id/urlInput"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:hint="https://youtube.com/watch?v=…"
+        android:textColorHint="@color/muted"
+        android:textColor="@color/text"
+        android:background="@drawable/input_bg"
+        android:padding="14dp"
+        android:textSize="13sp"
+        android:inputType="textUri"
+        android:imeOptions="actionGo"
+        android:singleLine="true"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/fetchBtn"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="80dp" />
+
+    <!-- Fetch button -->
+    <Button
+        android:id="@+id/fetchBtn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="FETCH"
+        android:backgroundTint="@color/accent"
+        android:textColor="#000000"
+        android:textStyle="bold"
+        android:textSize="13sp"
+        android:paddingHorizontal="20dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/urlInput"
+        app:layout_constraintBottom_toBottomOf="@id/urlInput" />
+
+    <!-- Progress bar -->
+    <ProgressBar
+        android:id="@+id/progressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:indeterminateTint="@color/accent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/urlInput"
+        android:layout_marginTop="16dp" />
+
+    <!-- Status text -->
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="waiting for url…"
+        android:textColor="@color/muted"
+        android:textSize="12sp"
+        app:layout_constraintStart_toEndOf="@id/progressBar"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/progressBar"
+        app:layout_constraintBottom_toBottomOf="@id/progressBar"
+        android:layout_marginStart="10dp" />
+
+    <!-- Divider -->
+    <View
+        android:id="@+id/divider"
+        android:layout_width="0dp"
+        android:layout_height="1dp"
+        android:background="@color/border"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/progressBar"
+        android:layout_marginTop="28dp" />
+
+    <!-- Note -->
+    <TextView
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="supports youtube, soundcloud, and most platforms yt-dlp handles.\noutput is best available audio quality · saved to Downloads."
+        android:textColor="@color/muted"
+        android:textSize="11sp"
+        android:lineSpacingMultiplier="1.5"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/divider"
+        android:layout_marginTop="16dp" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
