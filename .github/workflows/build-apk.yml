@@ -29,6 +29,11 @@ jobs:
 
       - name: Make gradlew executable
         run: chmod +x ./gradlew
+        
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+         python-version: '3.13'
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon
