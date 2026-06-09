@@ -18,13 +18,6 @@ android {
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
         }
-
-        python {
-            pip {
-                install("yt-dlp")
-            }
-            buildPython("3.13")
-        }
     }
 
     buildTypes {
@@ -48,6 +41,16 @@ android {
 
     buildFeatures {
         viewBinding = true
+    }
+}
+
+// Chaquopy 15+ uses a top-level chaquopy {} block, not python {} inside defaultConfig
+chaquopy {
+    defaultConfig {
+        version = "3.13"
+        pip {
+            install("yt-dlp")
+        }
     }
 }
 
