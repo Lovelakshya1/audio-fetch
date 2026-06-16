@@ -45,6 +45,7 @@ android {
     }
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 }
 // Chaquopy 15+ uses a top-level chaquopy {} block, not python {} inside defaultConfig
