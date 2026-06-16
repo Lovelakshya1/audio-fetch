@@ -1,5 +1,8 @@
 package com.audiofetch
 
+import androidx.appcompat.app.AlertDialog
+import android.content.Intent
+import android.net.Uri
 import android.content.ContentValues
 import android.os.Build
 import android.os.Bundle
@@ -25,6 +28,24 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        lifecycleScope.launch {
+    val update = withContext(Dispatchers.IO) {
+        UpdateChecker.checkForUpdate(BuildConfig.VERSION_CODE)
+    }
+    if (update != null) {
+        AlertDialog.Builder(this@MainActivity)
+            .setTitle("Update available — ${update.versionName}")
+            .setMessage(update.changelog)
+            .setPositiveButton("Update Now") { _, _ ->
+                UpdateChecker.downloadAndInstall(this@MainActivity, update)
+            }
+            .setNeutralButton("View on GitHub") { _, _ ->
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.downloadUrl)))
+            }
+            .setNegativeButton("Later", null)
+            .show()
+    }
+}
 
         // Start Chaquopy once (idempotent after first call)
         if (!Python.isStarted()) {
