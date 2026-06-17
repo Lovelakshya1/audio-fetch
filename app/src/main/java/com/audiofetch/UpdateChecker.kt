@@ -7,6 +7,7 @@ import android.content.IntentFilter
 import android.net.Uri
 import android.app.DownloadManager
 import android.provider.Settings
+import android.widget.Toast
 import androidx.core.content.FileProvider
 import org.json.JSONObject
 import java.io.File
@@ -17,13 +18,14 @@ data class UpdateInfo(
     val versionCode: Int,
     val versionName: String,
     val changelog: String,
-    val downloadUrl: String
+    val downloadUrl: String,
+    val expectedSize: Long
 )
 
 object UpdateChecker {
-    private const val REPO_OWNER = "kabirvvv" 
-    private const val REPO_NAME = "audio-fetch"    
-    private const val API_URL = "https://api.github.com/repos/kabirvvv/audio-fetch/releases/latest"
+    private const val REPO_OWNER = "kabirvvv"
+    private const val REPO_NAME = "audio-fetch"
+    private const val API_URL = "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest"
 
     fun checkForUpdate(currentVersionCode: Int): UpdateInfo? {
         return try {
@@ -31,7 +33,6 @@ object UpdateChecker {
             conn.setRequestProperty("Accept", "application/vnd.github+json")
             conn.connectTimeout = 8000
             conn.readTimeout = 8000
-
             val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
             val tagName = json.getString("tag_name")
             val remoteCode = tagName.removePrefix("v").toIntOrNull() ?: return null
@@ -39,20 +40,26 @@ object UpdateChecker {
 
             val assets = json.getJSONArray("assets")
             var apkUrl: String? = null
+            var size: Long = -1
             for (i in 0 until assets.length()) {
                 val a = assets.getJSONObject(i)
                 if (a.getString("name").endsWith(".apk")) {
-                    apkUrl = a.getString("browser_download_url"); break
+                    apkUrl = a.getString("browser_download_url")
+                    size = a.getLong("size")
+                    break
                 }
             }
             apkUrl ?: return null
 
             UpdateInfo(remoteCode, json.optString("name", tagName),
-                json.optString("body", "No changelog provided."), apkUrl)
+                json.optString("body", "No changelog provided."), apkUrl, size)
         } catch (e: Exception) { null }
     }
 
     fun downloadAndInstall(context: Context, update: UpdateInfo) {
+        val destFile = File(context.getExternalFilesDir("updates"), "audiofetch-update.apk")
+        if (destFile.exists()) destFile.delete() // always start clean, never reuse a stale/partial file
+
         val request = DownloadManager.Request(Uri.parse(update.downloadUrl))
             .setTitle("AudioFetch update")
             .setDestinationInExternalFilesDir(context, "updates", "audiofetch-update.apk")
@@ -63,9 +70,27 @@ object UpdateChecker {
 
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {
-                if (intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1) == downloadId) {
-                    context.unregisterReceiver(this)
+                if (intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1) != downloadId) return
+                context.unregisterReceiver(this)
+
+                val query = DownloadManager.Query().setFilterById(downloadId)
+                val cursor = dm.query(query)
+                var success = false
+                if (cursor.moveToFirst()) {
+                    val statusIdx = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                    success = cursor.getInt(statusIdx) == DownloadManager.STATUS_SUCCESSFUL
+                }
+                cursor.close()
+
+                val sizeOk = update.expectedSize <= 0 || destFile.length() == update.expectedSize
+
+                if (success && sizeOk) {
                     installApk(context)
+                } else {
+                    Toast.makeText(context,
+                        "Update download failed or was corrupted (got ${destFile.length()} bytes, expected ${update.expectedSize}). Please try again.",
+                        Toast.LENGTH_LONG).show()
+                    destFile.delete()
                 }
             }
         }
