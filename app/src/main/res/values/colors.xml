@@ -7,6 +7,13 @@
     <color name="muted">#555555</color>
     <color name="border">#222222</color>
 
+    <!-- Glassmorphism tokens -->
+    <color name="glow_accent">#33C8F135</color>   <!-- lime ambient glow, low alpha -->
+    <color name="glow_secondary">#3322D3EE</color> <!-- teal ambient glow, low alpha -->
+    <color name="glass_fill">#14FFFFFF</color>     <!-- frosted panel fill -->
+    <color name="glass_fill_inner">#0DFFFFFF</color> <!-- input field fill, slightly dimmer -->
+    <color name="glass_border">#26FFFFFF</color>   <!-- frosted edge highlight -->
+
     <!-- Status colours -->
     <color name="status_error">#FF4F4F</color>
     <color name="status_success">#C8F135</color>
