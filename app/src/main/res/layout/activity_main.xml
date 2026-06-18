@@ -26,7 +26,7 @@
         android:id="@+id/subtitleText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="// paste url → get audio. that's it."
+        android:text="// paste a url, or just search a song."
         android:textColor="@color/muted"
         android:textSize="12sp"
         app:layout_constraintStart_toStartOf="parent"
@@ -53,18 +53,18 @@
             android:layout_height="wrap_content"
             android:padding="20dp">
 
-            <!-- URL input -->
+            <!-- URL or search input -->
             <EditText
                 android:id="@+id/urlInput"
                 android:layout_width="0dp"
                 android:layout_height="52dp"
-                android:hint="https://youtube.com/watch?v=…"
+                android:hint="paste a url, or search a song…"
                 android:textColorHint="@color/muted"
                 android:textColor="@color/text"
                 android:background="@drawable/input_bg"
                 android:paddingHorizontal="14dp"
                 android:textSize="13sp"
-                android:inputType="textUri"
+                android:inputType="text"
                 android:imeOptions="actionGo"
                 android:singleLine="true"
                 app:layout_constraintStart_toStartOf="parent"
@@ -113,11 +113,9 @@
                 android:textSize="12sp"
                 app:layout_constraintStart_toEndOf="@id/progressBar"
                 app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toTopOf="@id/urlInput"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintVertical_bias="0"
-                android:layout_marginStart="10dp"
-                android:layout_marginTop="16dp" />
+                app:layout_constraintTop_toTopOf="@id/progressBar"
+                app:layout_constraintBottom_toBottomOf="@id/progressBar"
+                android:layout_marginStart="10dp" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
     </com.google.android.material.card.MaterialCardView>
