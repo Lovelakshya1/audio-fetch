@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg"
+    android:background="@drawable/bg_glow"
     android:padding="28dp">
 
     <!-- Title -->
@@ -19,8 +19,7 @@
         android:letterSpacing="0.04"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toTopOf="@id/subtitleText"
-        android:layout_marginBottom="4dp" />
+        android:layout_marginTop="12dp" />
 
     <!-- Subtitle -->
     <TextView
@@ -32,69 +31,96 @@
         android:textSize="12sp"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/titleText"
-        app:layout_constraintBottom_toTopOf="@id/urlInput"
-        android:layout_marginBottom="32dp" />
+        android:layout_marginTop="4dp" />
 
-    <!-- URL input -->
-    <EditText
-        android:id="@+id/urlInput"
+    <!-- Frosted glass panel -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/glassCard"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:hint="https://youtube.com/watch?v=…"
-        android:textColorHint="@color/muted"
-        android:textColor="@color/text"
-        android:background="@drawable/input_bg"
-        android:padding="14dp"
-        android:textSize="13sp"
-        android:inputType="textUri"
-        android:imeOptions="actionGo"
-        android:singleLine="true"
+        app:cardBackgroundColor="@color/glass_fill"
+        app:cardCornerRadius="24dp"
+        app:cardElevation="0dp"
+        app:strokeWidth="1dp"
+        app:strokeColor="@color/glass_border"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toStartOf="@id/fetchBtn"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        android:layout_marginEnd="8dp"
-        android:layout_marginBottom="80dp" />
-
-    <!-- Fetch button -->
-    <Button
-        android:id="@+id/fetchBtn"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="FETCH"
-        android:backgroundTint="@color/accent"
-        android:textColor="#000000"
-        android:textStyle="bold"
-        android:textSize="13sp"
-        android:paddingHorizontal="20dp"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="@id/urlInput"
-        app:layout_constraintBottom_toBottomOf="@id/urlInput" />
+        app:layout_constraintTop_toBottomOf="@id/subtitleText"
+        android:layout_marginTop="32dp">
 
-    <!-- Progress bar -->
-    <ProgressBar
-        android:id="@+id/progressBar"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:visibility="gone"
-        android:indeterminateTint="@color/accent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/urlInput"
-        android:layout_marginTop="16dp" />
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="20dp">
 
-    <!-- Status text -->
-    <TextView
-        android:id="@+id/statusText"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="waiting for url…"
-        android:textColor="@color/muted"
-        android:textSize="12sp"
-        app:layout_constraintStart_toEndOf="@id/progressBar"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="@id/progressBar"
-        app:layout_constraintBottom_toBottomOf="@id/progressBar"
-        android:layout_marginStart="10dp" />
+            <!-- URL input -->
+            <EditText
+                android:id="@+id/urlInput"
+                android:layout_width="0dp"
+                android:layout_height="52dp"
+                android:hint="https://youtube.com/watch?v=…"
+                android:textColorHint="@color/muted"
+                android:textColor="@color/text"
+                android:background="@drawable/input_bg"
+                android:paddingHorizontal="14dp"
+                android:textSize="13sp"
+                android:inputType="textUri"
+                android:imeOptions="actionGo"
+                android:singleLine="true"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/fetchBtn"
+                app:layout_constraintTop_toTopOf="parent"
+                android:layout_marginEnd="8dp" />
+
+            <!-- Fetch button -->
+            <Button
+                android:id="@+id/fetchBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="52dp"
+                android:text="FETCH"
+                android:background="@drawable/fetch_btn_bg"
+                android:textColor="#000000"
+                android:textStyle="bold"
+                android:textSize="13sp"
+                android:paddingHorizontal="22dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:stateListAnimator="@null"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="@id/urlInput"
+                app:layout_constraintBottom_toBottomOf="@id/urlInput" />
+
+            <!-- Progress bar -->
+            <ProgressBar
+                android:id="@+id/progressBar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:indeterminateTint="@color/accent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/urlInput"
+                android:layout_marginTop="16dp" />
+
+            <!-- Status text -->
+            <TextView
+                android:id="@+id/statusText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="waiting for url…"
+                android:textColor="@color/muted"
+                android:textSize="12sp"
+                app:layout_constraintStart_toEndOf="@id/progressBar"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="@id/urlInput"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintVertical_bias="0"
+                android:layout_marginStart="10dp"
+                android:layout_marginTop="16dp" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </com.google.android.material.card.MaterialCardView>
 
     <!-- Divider -->
     <View
@@ -104,14 +130,14 @@
         android:background="@color/border"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/progressBar"
+        app:layout_constraintTop_toBottomOf="@id/glassCard"
         android:layout_marginTop="28dp" />
 
     <!-- Note -->
     <TextView
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="supports youtube, soundcloud, and most platforms yt-dlp handles.\noutput is best available audio quality · saved to Downloads."
+        android:text="supports youtube, soundcloud, and most platforms yt-dlp handles.\nm4a preferred, with cover art embedded automatically · saved to Downloads."
         android:textColor="@color/muted"
         android:textSize="11sp"
         android:lineSpacingMultiplier="1.5"
