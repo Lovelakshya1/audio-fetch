@@ -14,6 +14,26 @@ def sanitize(name: str) -> str:
     return name[:150] or "audio"
 
 
+def resolve_query(text: str) -> str:
+    """If text already looks like a URL, pass it through untouched.
+    Otherwise treat it as a search term and grab YouTube's top result."""
+    text = text.strip()
+    if re.match(r'^[a-zA-Z][a-zA-Z0-9+.\-]*://', text):
+        return text
+    return f"ytsearch1:{text}"
+
+
+def first_entry(info: dict) -> dict:
+    """yt-dlp wraps search/playlist results in an 'entries' list instead of
+    returning the video's info dict directly — unwrap it either way."""
+    if info and "entries" in info:
+        entries = [e for e in info["entries"] if e]
+        if not entries:
+            raise ValueError("No results found for that search.")
+        return entries[0]
+    return info
+
+
 def embed_cover_art(audio_path: str, thumb_path: str, title: str, artist: str) -> None:
     """Tags an .m4a/.mp4 file with cover art + basic metadata using pure-Python
     mutagen — no ffmpeg involved at all. Only works on real MP4-container files
@@ -35,6 +55,8 @@ def embed_cover_art(audio_path: str, thumb_path: str, title: str, artist: str) -
 
 def download_audio(url: str, download_dir: str) -> str:
     try:
+        query = resolve_query(url)
+
         # ── 1. Extract metadata without downloading ──────────────────────────
         info_opts = {
             "quiet": True,
@@ -42,12 +64,13 @@ def download_audio(url: str, download_dir: str) -> str:
             "extractor_args": {"youtube": {"player_client": ["tv_embedded"]}},
         }
         with yt_dlp.YoutubeDL(info_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
+            info = first_entry(ydl.extract_info(query, download=False))
 
         raw_title = info.get("title", "audio")
         title = sanitize(raw_title)
         artist = info.get("artist") or info.get("uploader") or info.get("channel") or ""
         thumbnail_url = info.get("thumbnail", "")
+        video_url = info.get("webpage_url") or info.get("url") or query
 
         # ── 2. Download thumbnail (best-effort, used for cover art) ──────────
         thumb_path = ""
@@ -69,7 +92,7 @@ def download_audio(url: str, download_dir: str) -> str:
             "concurrent_fragment_downloads": 16,
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            dl_info = ydl.extract_info(url, download=True)
+            dl_info = first_entry(ydl.extract_info(video_url, download=True))
 
         ext = dl_info.get("ext", "m4a")
         final_path = os.path.join(download_dir, f"{title}.{ext}")
