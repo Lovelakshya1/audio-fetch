@@ -18,6 +18,7 @@ import com.chaquo.python.android.AndroidPlatform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import java.io.File
 
 class MainActivity : AppCompatActivity() {
@@ -28,55 +29,139 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        lifecycleScope.launch {
-    val update = withContext(Dispatchers.IO) {
-        UpdateChecker.checkForUpdate(BuildConfig.VERSION_CODE)
-    }
-    if (update != null) {
-        AlertDialog.Builder(this@MainActivity)
-            .setTitle("Update available — ${update.versionName}")
-            .setMessage(update.changelog)
-            .setPositiveButton("Update Now") { _, _ ->
-                UpdateChecker.downloadAndInstall(this@MainActivity, update)
-            }
-            .setNeutralButton("View on GitHub") { _, _ ->
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.downloadUrl)))
-            }
-            .setNegativeButton("Later", null)
-            .show()
-    }
-}
 
-        // Start Chaquopy once (idempotent after first call)
+        // Update check
+        lifecycleScope.launch {
+            val update = withContext(Dispatchers.IO) {
+                UpdateChecker.checkForUpdate(BuildConfig.VERSION_CODE)
+            }
+            if (update != null) {
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Update available — ${update.versionName}")
+                    .setMessage(update.changelog)
+                    .setPositiveButton("Update Now") { _, _ ->
+                        UpdateChecker.downloadAndInstall(this@MainActivity, update)
+                    }
+                    .setNeutralButton("View on GitHub") { _, _ ->
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.downloadUrl)))
+                    }
+                    .setNegativeButton("Later", null)
+                    .show()
+            }
+        }
+
         if (!Python.isStarted()) {
             Python.start(AndroidPlatform(this))
         }
 
-        binding.fetchBtn.setOnClickListener { startDownload() }
+        binding.fetchBtn.setOnClickListener { handleInput() }
 
         binding.urlInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_GO) {
-                startDownload()
+                handleInput()
                 true
             } else false
         }
     }
 
-    private fun startDownload() {
-        val url = binding.urlInput.text?.toString()?.trim() ?: ""
-        if (url.isEmpty()) {
-            setStatus("no url provided.", StatusType.ERROR)
+    /** Entry point — decides whether to search or download directly. */
+    private fun handleInput() {
+        val input = binding.urlInput.text?.toString()?.trim() ?: ""
+        if (input.isEmpty()) {
+            setStatus("no input provided.", StatusType.ERROR)
             return
         }
 
+        if (isUrl(input)) {
+            startDownload(input)
+        } else {
+            startSearch(input)
+        }
+    }
+
+    private fun isUrl(text: String): Boolean {
+        return Regex("^[a-zA-Z][a-zA-Z0-9+.\\-]*://").containsMatchIn(text)
+    }
+
+    // ── Search ────────────────────────────────────────────────────────────────
+
+    private fun startSearch(query: String) {
+        setStatus("searching…", StatusType.NEUTRAL)
+        binding.fetchBtn.isEnabled = false
+        binding.progressBar.isVisible = true
+
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) { runSearch(query) }
+
+            binding.fetchBtn.isEnabled = true
+            binding.progressBar.isVisible = false
+
+            if (result.startsWith("ERROR:")) {
+                setStatus(result, StatusType.ERROR)
+            } else {
+                showSearchResults(result)
+            }
+        }
+    }
+
+    private fun runSearch(query: String): String {
+        return try {
+            val py = Python.getInstance()
+            val module = py.getModule("main")
+            module.callAttr("search_audio", query).toString()
+        } catch (e: Exception) {
+            "ERROR: ${e.message}"
+        }
+    }
+
+    private fun showSearchResults(jsonString: String) {
+        try {
+            val arr = JSONArray(jsonString)
+            if (arr.length() == 0) {
+                setStatus("no results found.", StatusType.ERROR)
+                return
+            }
+
+            // Build display labels and url map
+            val labels = Array(arr.length()) { i ->
+                val item = arr.getJSONObject(i)
+                val title  = item.optString("title", "Unknown")
+                val artist = item.optString("artist", "")
+                if (artist.isNotEmpty()) "$title\n$artist" else title
+            }
+            val urls = Array(arr.length()) { i ->
+                arr.getJSONObject(i).optString("url", "")
+            }
+
+            setStatus("${arr.length()} results found.", StatusType.NEUTRAL)
+
+            AlertDialog.Builder(this)
+                .setTitle("select a track")
+                .setItems(labels) { _, which ->
+                    val selectedUrl = urls[which]
+                    if (selectedUrl.isNotEmpty()) {
+                        startDownload(selectedUrl)
+                    } else {
+                        setStatus("ERROR: no url for that result.", StatusType.ERROR)
+                    }
+                }
+                .setNegativeButton("cancel", null)
+                .show()
+
+        } catch (e: Exception) {
+            setStatus("ERROR: failed to parse results.", StatusType.ERROR)
+        }
+    }
+
+    // ── Download ──────────────────────────────────────────────────────────────
+
+    private fun startDownload(url: String) {
         setStatus("fetching… this may take a moment.", StatusType.NEUTRAL)
         binding.fetchBtn.isEnabled = false
         binding.progressBar.isVisible = true
 
         lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                runDownload(url)
-            }
+            val result = withContext(Dispatchers.IO) { runDownload(url) }
 
             binding.fetchBtn.isEnabled = true
             binding.progressBar.isVisible = false
@@ -90,10 +175,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Runs on IO dispatcher. Calls Python main.download_audio(url, tmpDir)
-     * Returns the local file path on success, or "ERROR: …" on failure.
-     */
     private fun runDownload(url: String): String {
         return try {
             val py = Python.getInstance()
@@ -105,20 +186,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Copies the downloaded tmp file to the public Downloads folder,
-     * using MediaStore on API 29+ and direct File copy below that.
-     */
+    // ── Save to Downloads ─────────────────────────────────────────────────────
+
     private fun saveToDownloads(srcPath: String) {
         val src = File(srcPath)
         if (!src.exists()) return
 
         val mimeType = when (src.extension.lowercase()) {
-            "mp3" -> "audio/mpeg"
-            "m4a" -> "audio/mp4"
+            "mp3"  -> "audio/mpeg"
+            "m4a"  -> "audio/mp4"
             "opus" -> "audio/opus"
             "webm" -> "audio/webm"
-            else -> "audio/*"
+            else   -> "audio/*"
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -139,8 +218,10 @@ class MainActivity : AppCompatActivity() {
             src.copyTo(File(destDir, src.name), overwrite = true)
         }
 
-        src.delete() // clean up cache
+        src.delete()
     }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private enum class StatusType { NEUTRAL, ERROR, SUCCESS }
 
