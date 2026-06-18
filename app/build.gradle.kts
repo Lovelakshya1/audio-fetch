@@ -55,6 +55,7 @@ chaquopy {
         pip {
             install("yt-dlp==2026.06.09")
             install("mutagen")
+            install("Pillow")
         }
     }
 }
