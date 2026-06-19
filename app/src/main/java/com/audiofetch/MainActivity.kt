@@ -166,12 +166,51 @@ class MainActivity : AppCompatActivity() {
             binding.fetchBtn.isEnabled = true
             binding.progressBar.isVisible = false
 
-            if (result.startsWith("ERROR:")) {
-                setStatus(result, StatusType.ERROR)
-            } else {
-                setStatus("done → saved to Downloads", StatusType.SUCCESS)
-                saveToDownloads(result)
+            when {
+                result.startsWith("ERROR:") -> {
+                    setStatus(result, StatusType.ERROR)
+                }
+                result.trim().startsWith("{") -> {
+                    // playlist result (JSON)
+                    handlePlaylistResult(result)
+                }
+                else -> {
+                    // single track (file path)
+                    setStatus("done → saved to Downloads", StatusType.SUCCESS)
+                    saveToDownloads(result)
+                }
             }
+        }
+    }
+
+    private fun handlePlaylistResult(jsonString: String) {
+        try {
+            val obj = org.json.JSONObject(jsonString)
+            val folder = obj.optString("folder", "")
+            val name = obj.optString("name", "playlist")
+            val done = obj.optInt("done", 0)
+            val failed = obj.optInt("failed", 0)
+
+            if (folder.isEmpty() || done == 0) {
+                setStatus("ERROR: playlist download failed.", StatusType.ERROR)
+                return
+            }
+
+            setStatus("saving $done tracks…", StatusType.NEUTRAL)
+            binding.progressBar.isVisible = true
+
+            lifecycleScope.launch {
+                withContext(Dispatchers.IO) { saveFolderToDownloads(folder, name) }
+                binding.progressBar.isVisible = false
+                val msg = if (failed > 0) {
+                    "done → $done saved, $failed failed → Downloads/$name"
+                } else {
+                    "done → $done tracks saved → Downloads/$name"
+                }
+                setStatus(msg, if (failed > 0) StatusType.NEUTRAL else StatusType.SUCCESS)
+            }
+        } catch (e: Exception) {
+            setStatus("ERROR: failed to parse playlist result.", StatusType.ERROR)
         }
     }
 
@@ -219,6 +258,49 @@ class MainActivity : AppCompatActivity() {
         }
 
         src.delete()
+    }
+
+    /** Save every file in a local folder into Downloads/<playlistName>/ */
+    private fun saveFolderToDownloads(folderPath: String, playlistName: String) {
+        val folder = File(folderPath)
+        if (!folder.exists() || !folder.isDirectory) return
+
+        val audioFiles = folder.listFiles { f ->
+            f.isFile && f.extension.lowercase() in listOf("mp3", "m4a", "opus", "webm", "aac")
+        } ?: emptyArray()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            for (src in audioFiles) {
+                val mimeType = when (src.extension.lowercase()) {
+                    "mp3"  -> "audio/mpeg"
+                    "m4a"  -> "audio/mp4"
+                    "opus" -> "audio/opus"
+                    "webm" -> "audio/webm"
+                    else   -> "audio/*"
+                }
+                val values = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, src.name)
+                    put(MediaStore.Downloads.MIME_TYPE, mimeType)
+                    put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/$playlistName")
+                    put(MediaStore.Downloads.IS_PENDING, 1)
+                }
+                val resolver = contentResolver
+                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: continue
+                resolver.openOutputStream(uri)?.use { out -> src.inputStream().copyTo(out) }
+                values.clear()
+                values.put(MediaStore.Downloads.IS_PENDING, 0)
+                resolver.update(uri, values, null, null)
+            }
+        } else {
+            val baseDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val destDir = File(baseDir, playlistName)
+            destDir.mkdirs()
+            for (src in audioFiles) {
+                src.copyTo(File(destDir, src.name), overwrite = true)
+            }
+        }
+
+        folder.deleteRecursively()
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
