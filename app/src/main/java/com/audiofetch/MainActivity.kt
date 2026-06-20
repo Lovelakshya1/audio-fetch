@@ -174,7 +174,7 @@ class MainActivity : AppCompatActivity() {
                 runPlaylistDownloadWithProgress(url, tmpDir, folder, total)
             } else {
                 setStatus("fetching… this may take a moment.", StatusType.NEUTRAL)
-                val result = withContext(Dispatchers.IO) { runDownload(url, tmpDir) }
+                val result = withContext(Dispatchers.IO) { runDownload(url, tmpDir, knownSingle = true) }
 
                 binding.fetchBtn.isEnabled = true
                 binding.progressBar.isVisible = false
@@ -298,11 +298,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun runDownload(url: String, tmpDir: String): String {
+    private fun runDownload(url: String, tmpDir: String, knownSingle: Boolean = false): String {
         return try {
             val py = Python.getInstance()
             val module = py.getModule("main")
-            module.callAttr("download_audio", url, tmpDir).toString()
+            module.callAttr("download_audio", url, tmpDir, knownSingle).toString()
         } catch (e: Exception) {
             "ERROR: ${e.message}"
         }
