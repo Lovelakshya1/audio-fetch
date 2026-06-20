@@ -10,10 +10,10 @@ android {
         applicationId = "com.audiofetch"
         minSdk = 24
         targetSdk = 34
-        versionCode = 9
-        versionName = "9"
+        versionCode = 10
+        versionName = "10"
         ndk {
-            abiFilters += listOf("arm64-v8a", "x86_64")
+            abiFilters += listOf("arm64-v8a")
         }
     }
     // --- NEW: signing config for release builds ---
