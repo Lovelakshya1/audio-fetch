@@ -23,6 +23,11 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Generate app icons
+        run: |
+          pip install Pillow
+          python3 scripts/generate_icons.py
+
       - name: Download Gradle wrapper jar
         run: curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.7.0/gradle/wrapper/gradle-wrapper.jar
 
