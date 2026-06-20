@@ -120,8 +120,89 @@ def _download_single(video_url: str, video_info: dict, download_dir: str) -> str
     return final_path
 
 
+def manual_thumbnail(video_id: str) -> str:
+    """Build a guaranteed-valid YouTube thumbnail URL from a video ID.
+    extract_flat doesn't fetch real thumbnails, so we construct it ourselves."""
+    if not video_id:
+        return ""
+    return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+
+
+def extract_video_id(entry: dict) -> str:
+    """Pull the bare video ID from a yt-dlp flat search entry.
+    Returns '' if this isn't actually a video (e.g. a channel result)."""
+    vid = entry.get("id") or ""
+    # Real YouTube video IDs are always exactly 11 chars. Channel IDs (UC...) are 24.
+    if vid and len(vid) == 11 and re.match(r'^[0-9A-Za-z_-]{11}$', vid):
+        return vid
+    url = entry.get("url") or entry.get("webpage_url") or ""
+    match = re.search(r'(?:v=|youtu\.be/|shorts/)([0-9A-Za-z_-]{11})(?:$|[?&])', url)
+    return match.group(1) if match else ""
+
+
+def _is_real_video(entry: dict) -> bool:
+    """Filter out channels, playlists, and other non-track results."""
+    entry_type = (entry.get("_type") or "video").lower()
+    if entry_type not in ("video", "url"):
+        return False
+    # Channel results have ie_key == 'YoutubeTab' or duration is None with no video id
+    if entry.get("ie_key") == "YoutubeTab":
+        return False
+    if not extract_video_id(entry):
+        return False
+    return True
+
+
+def _official_score(entry: dict) -> int:
+    """Score a search result higher if it looks like an official upload.
+    Higher score = more likely official audio/video, ranked first."""
+    title = (entry.get("title") or "").lower()
+    channel = (entry.get("channel") or entry.get("uploader") or "").lower()
+
+    score = 0
+
+    # Strong positive signals
+    if "official audio" in title:
+        score += 50
+    if "official video" in title:
+        score += 45
+    if "official music video" in title:
+        score += 45
+    if channel.endswith("vevo") or "vevo" in channel:
+        score += 40
+    if entry.get("channel_is_verified"):
+        score += 30
+    if "topic" in channel:  # "Artist - Topic" auto-generated channels = official audio
+        score += 35
+
+    # Negative signals — push down low-quality / unofficial uploads
+    if "lyric" in title or "lyrics" in title:
+        score -= 10
+    if "cover" in title:
+        score -= 15
+    if "remix" in title and "official" not in title:
+        score -= 5
+    if "reaction" in title:
+        score -= 25
+    if "live" in title and "official" not in title:
+        score -= 10
+    if "8d audio" in title or "slowed" in title or "sped up" in title or "nightcore" in title:
+        score -= 20
+
+    return score
+
+
+def _normalize_for_dedupe(title: str, artist: str) -> str:
+    """Build a loose key to detect duplicate uploads of the same track."""
+    t = title.lower()
+    t = re.sub(r'\(.*?\)|\[.*?\]', '', t)              # strip (Official Video), [HD], etc.
+    t = re.sub(r'\bofficial\b|\bmusic\b|\bvideo\b|\baudio\b|\blyrics?\b', '', t)
+    t = re.sub(r'[^a-z0-9]+', '', t)                    # strip punctuation/spaces entirely
+    return t
+
+
 def search_audio(query: str) -> str:
-    """Search YouTube for up to 5 results.
+    """Search YouTube for up to 15 results, ranked with official audio/video first.
     Returns JSON list of {title, artist, thumbnail, url} or 'ERROR: ...'"""
     try:
         opts = {
@@ -130,17 +211,36 @@ def search_audio(query: str) -> str:
             "extract_flat": True,
             "extractor_args": {"youtube": {"player_client": ["tv_embedded"]}},
         }
+        # Fetch extra (25) since we'll filter out channels/playlists and dedupe
         with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(f"ytsearch5:{query}", download=False)
+            info = ydl.extract_info(f"ytsearch25:{query}", download=False)
 
         entries = [e for e in (info.get("entries") or []) if e]
+        entries = [e for e in entries if _is_real_video(e)]
+
+        # Rank: official audio/video first, ties preserve YouTube's original relevance order
+        ranked = sorted(entries, key=lambda e: -_official_score(e))
+
         results = []
-        for e in entries[:5]:
+        seen_keys = set()
+        for e in ranked:
+            if len(results) >= 15:
+                break
+
+            title = e.get("title") or "Unknown"
+            artist = e.get("artist") or e.get("uploader") or e.get("channel") or ""
+
+            dedupe_key = _normalize_for_dedupe(title, artist)
+            if dedupe_key in seen_keys:
+                continue
+            seen_keys.add(dedupe_key)
+
+            video_id = extract_video_id(e)
             results.append({
-                "title":     e.get("title") or "Unknown",
-                "artist":    e.get("artist") or e.get("uploader") or e.get("channel") or "",
-                "thumbnail": e.get("thumbnail") or "",
-                "url":       e.get("url") or e.get("webpage_url") or "",
+                "title":     title,
+                "artist":    artist,
+                "thumbnail": manual_thumbnail(video_id),
+                "url":       e.get("url") or e.get("webpage_url") or (f"https://www.youtube.com/watch?v={video_id}" if video_id else ""),
             })
         return json.dumps(results)
     except Exception as ex:
@@ -282,4 +382,4 @@ def download_audio(url: str, download_dir: str) -> str:
 
     except Exception as e:
         return f"ERROR: {str(e)}"
-            
+    
