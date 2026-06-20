@@ -122,31 +122,25 @@ class MainActivity : AppCompatActivity() {
                 return
             }
 
-            // Build display labels and url map
-            val labels = Array(arr.length()) { i ->
+            val results = (0 until arr.length()).map { i ->
                 val item = arr.getJSONObject(i)
-                val title  = item.optString("title", "Unknown")
-                val artist = item.optString("artist", "")
-                if (artist.isNotEmpty()) "$title\n$artist" else title
-            }
-            val urls = Array(arr.length()) { i ->
-                arr.getJSONObject(i).optString("url", "")
+                SearchResult(
+                    title = item.optString("title", "Unknown"),
+                    artist = item.optString("artist", ""),
+                    thumbnail = item.optString("thumbnail", ""),
+                    url = item.optString("url", "")
+                )
             }
 
-            setStatus("${arr.length()} results found.", StatusType.NEUTRAL)
+            setStatus("${results.size} results found.", StatusType.NEUTRAL)
 
-            AlertDialog.Builder(this)
-                .setTitle("select a track")
-                .setItems(labels) { _, which ->
-                    val selectedUrl = urls[which]
-                    if (selectedUrl.isNotEmpty()) {
-                        startDownload(selectedUrl)
-                    } else {
-                        setStatus("ERROR: no url for that result.", StatusType.ERROR)
-                    }
+            SearchResultsBottomSheet(results) { selected ->
+                if (selected.url.isNotEmpty()) {
+                    startDownload(selected.url)
+                } else {
+                    setStatus("ERROR: no url for that result.", StatusType.ERROR)
                 }
-                .setNegativeButton("cancel", null)
-                .show()
+            }.show(supportFragmentManager, "search_results")
 
         } catch (e: Exception) {
             setStatus("ERROR: failed to parse results.", StatusType.ERROR)
@@ -156,26 +150,38 @@ class MainActivity : AppCompatActivity() {
     // ── Download ──────────────────────────────────────────────────────────────
 
     private fun startDownload(url: String) {
-        setStatus("fetching… this may take a moment.", StatusType.NEUTRAL)
+        setStatus("checking…", StatusType.NEUTRAL)
         binding.fetchBtn.isEnabled = false
         binding.progressBar.isVisible = true
 
         lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) { runDownload(url) }
+            val tmpDir = cacheDir.absolutePath
+            val infoResult = withContext(Dispatchers.IO) { runGetPlaylistInfo(url, tmpDir) }
 
-            binding.fetchBtn.isEnabled = true
-            binding.progressBar.isVisible = false
+            if (infoResult.startsWith("ERROR:")) {
+                binding.fetchBtn.isEnabled = true
+                binding.progressBar.isVisible = false
+                setStatus(infoResult, StatusType.ERROR)
+                return@launch
+            }
 
-            when {
-                result.startsWith("ERROR:") -> {
+            val infoObj = try { org.json.JSONObject(infoResult) } catch (e: Exception) { null }
+            val isPlaylist = infoObj?.optBoolean("is_playlist", false) ?: false
+
+            if (isPlaylist) {
+                val folder = infoObj!!.optString("folder", "")
+                val total = infoObj.optInt("total", 0)
+                runPlaylistDownloadWithProgress(url, tmpDir, folder, total)
+            } else {
+                setStatus("fetching… this may take a moment.", StatusType.NEUTRAL)
+                val result = withContext(Dispatchers.IO) { runDownload(url, tmpDir) }
+
+                binding.fetchBtn.isEnabled = true
+                binding.progressBar.isVisible = false
+
+                if (result.startsWith("ERROR:")) {
                     setStatus(result, StatusType.ERROR)
-                }
-                result.trim().startsWith("{") -> {
-                    // playlist result (JSON)
-                    handlePlaylistResult(result)
-                }
-                else -> {
-                    // single track (file path)
+                } else {
                     setStatus("done → saved to Downloads", StatusType.SUCCESS)
                     saveToDownloads(result)
                 }
@@ -183,7 +189,86 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun handlePlaylistResult(jsonString: String) {
+    @Volatile private var downloadResult: String? = null
+
+    /** Runs the playlist download on one coroutine while polling progress.json on another. */
+    private suspend fun runPlaylistDownloadWithProgress(
+        url: String,
+        tmpDir: String,
+        folder: String,
+        total: Int
+    ) {
+        downloadResult = null
+
+        // Download coroutine
+        val downloadJob = lifecycleScope.launch {
+            downloadResult = withContext(Dispatchers.IO) { runDownload(url, tmpDir) }
+        }
+
+        // Poller coroutine — updates status text until download finishes
+        val pollerJob = lifecycleScope.launch {
+            while (downloadResult == null) {
+                val progressJson = withContext(Dispatchers.IO) { runGetProgress(folder) }
+                try {
+                    val p = org.json.JSONObject(progressJson)
+                    val current = p.optInt("current", 0)
+                    val totalFromFile = p.optInt("total", total)
+                    val track = p.optString("track", "")
+                    val status = p.optString("status", "")
+
+                    when (status) {
+                        "starting" -> setStatus("starting playlist…", StatusType.NEUTRAL)
+                        "downloading" -> {
+                            val trimmedTrack = if (track.length > 28) track.take(28) + "…" else track
+                            setStatus("$current/$totalFromFile — $trimmedTrack", StatusType.NEUTRAL)
+                        }
+                        "done" -> setStatus("finishing up…", StatusType.NEUTRAL)
+                    }
+                } catch (e: Exception) {
+                    // progress.json not written yet, ignore
+                }
+                kotlinx.coroutines.delay(600)
+            }
+        }
+
+        downloadJob.join()
+        pollerJob.cancel()
+
+        binding.fetchBtn.isEnabled = true
+        binding.progressBar.isVisible = false
+
+        val result = downloadResult ?: "ERROR: unknown failure"
+        when {
+            result.startsWith("ERROR:") -> setStatus(result, StatusType.ERROR)
+            result.trim().startsWith("{") -> handlePlaylistResult(result)
+            else -> {
+                setStatus("done → saved to Downloads", StatusType.SUCCESS)
+                saveToDownloads(result)
+            }
+        }
+    }
+
+    private fun runGetPlaylistInfo(url: String, tmpDir: String): String {
+        return try {
+            val py = Python.getInstance()
+            val module = py.getModule("main")
+            module.callAttr("get_playlist_info", url, tmpDir).toString()
+        } catch (e: Exception) {
+            "ERROR: ${e.message}"
+        }
+    }
+
+    private fun runGetProgress(folder: String): String {
+        return try {
+            val py = Python.getInstance()
+            val module = py.getModule("main")
+            module.callAttr("get_progress", folder).toString()
+        } catch (e: Exception) {
+            "{}"
+        }
+    }
+
+    private suspend fun handlePlaylistResult(jsonString: String) {
         try {
             val obj = org.json.JSONObject(jsonString)
             val folder = obj.optString("folder", "")
@@ -199,26 +284,24 @@ class MainActivity : AppCompatActivity() {
             setStatus("saving $done tracks…", StatusType.NEUTRAL)
             binding.progressBar.isVisible = true
 
-            lifecycleScope.launch {
-                withContext(Dispatchers.IO) { saveFolderToDownloads(folder, name) }
-                binding.progressBar.isVisible = false
-                val msg = if (failed > 0) {
-                    "done → $done saved, $failed failed → Downloads/$name"
-                } else {
-                    "done → $done tracks saved → Downloads/$name"
-                }
-                setStatus(msg, if (failed > 0) StatusType.NEUTRAL else StatusType.SUCCESS)
+            withContext(Dispatchers.IO) { saveFolderToDownloads(folder, name) }
+            binding.progressBar.isVisible = false
+
+            val msg = if (failed > 0) {
+                "done → $done saved, $failed failed → Downloads/$name"
+            } else {
+                "done → $done tracks saved → Downloads/$name"
             }
+            setStatus(msg, if (failed > 0) StatusType.NEUTRAL else StatusType.SUCCESS)
         } catch (e: Exception) {
             setStatus("ERROR: failed to parse playlist result.", StatusType.ERROR)
         }
     }
 
-    private fun runDownload(url: String): String {
+    private fun runDownload(url: String, tmpDir: String): String {
         return try {
             val py = Python.getInstance()
             val module = py.getModule("main")
-            val tmpDir = cacheDir.absolutePath
             module.callAttr("download_audio", url, tmpDir).toString()
         } catch (e: Exception) {
             "ERROR: ${e.message}"
