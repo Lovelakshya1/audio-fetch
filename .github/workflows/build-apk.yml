@@ -11,6 +11,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Generate app icons
+        run: |
+          pip install Pillow
+          python3 scripts/generate_icons.py
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
