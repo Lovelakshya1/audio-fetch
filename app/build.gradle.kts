@@ -10,8 +10,8 @@ android {
         applicationId = "com.audiofetch"
         minSdk = 24
         targetSdk = 34
-        versionCode = 8
-        versionName = "8"
+        versionCode = 9
+        versionName = "9"
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
         }
@@ -64,4 +64,6 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
+    implementation("io.coil-kt:coil:2.6.0")
 }
