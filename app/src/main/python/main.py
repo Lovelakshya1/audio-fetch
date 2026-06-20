@@ -57,6 +57,21 @@ def embed_cover_art(audio_path: str, thumb_path: str, title: str, artist: str) -
         pass
 
 
+def _write_progress(download_dir: str, current: int, total: int, track_title: str, status: str = "downloading") -> None:
+    """Write progress.json so Kotlin can poll real-time playlist progress."""
+    try:
+        progress_path = os.path.join(download_dir, "progress.json")
+        with open(progress_path, "w") as f:
+            json.dump({
+                "current": current,
+                "total": total,
+                "track": track_title,
+                "status": status,
+            }, f)
+    except Exception:
+        pass
+
+
 def _download_single(video_url: str, video_info: dict, download_dir: str) -> str:
     """Download one track into download_dir. Returns final_path or raises."""
     raw_title     = video_info.get("title", "audio")
@@ -132,6 +147,50 @@ def search_audio(query: str) -> str:
         return f"ERROR: {str(ex)}"
 
 
+def get_playlist_info(url: str, download_dir: str) -> str:
+    """Quick check: is this a playlist? Returns JSON {is_playlist, name, folder, total} or 'ERROR: ...'.
+    Call this BEFORE download_audio so Kotlin knows the folder path to poll for progress."""
+    try:
+        info_opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "extract_flat": True,
+            "extractor_args": {"youtube": {"player_client": ["tv_embedded"]}},
+        }
+        with yt_dlp.YoutubeDL(info_opts) as ydl:
+            flat_info = ydl.extract_info(url, download=False)
+
+        entries = flat_info.get("entries") if flat_info else None
+        entries_list = list(entries) if entries is not None else []
+        is_playlist = len(entries_list) > 1
+
+        if is_playlist:
+            playlist_name = sanitize(flat_info.get("title") or flat_info.get("playlist_title") or "playlist")
+            playlist_tmp  = os.path.join(download_dir, playlist_name)
+            return json.dumps({
+                "is_playlist": True,
+                "name": playlist_name,
+                "folder": playlist_tmp,
+                "total": len(entries_list),
+            })
+        else:
+            return json.dumps({"is_playlist": False})
+    except Exception as e:
+        return f"ERROR: {str(e)}"
+
+
+def get_progress(folder: str) -> str:
+    """Read progress.json from a playlist folder. Returns JSON string or '{}' if not found yet."""
+    try:
+        progress_path = os.path.join(folder, "progress.json")
+        if not os.path.exists(progress_path):
+            return "{}"
+        with open(progress_path, "r") as f:
+            return f.read()
+    except Exception:
+        return "{}"
+
+
 def download_audio(url: str, download_dir: str) -> str:
     """Download a single track or a full playlist.
 
@@ -170,10 +229,15 @@ def download_audio(url: str, download_dir: str) -> str:
                 full_info = ydl.extract_info(url, download=False)
 
             all_entries = [e for e in (full_info.get("entries") or []) if e]
+            total_tracks = len(all_entries)
             done_files  = []
             failed      = 0
 
-            for entry in all_entries:
+            _write_progress(playlist_tmp, 0, total_tracks, "", "starting")
+
+            for idx, entry in enumerate(all_entries, start=1):
+                track_title = entry.get("title") or "track"
+                _write_progress(playlist_tmp, idx, total_tracks, track_title, "downloading")
                 try:
                     video_url = entry.get("webpage_url") or entry.get("url") or ""
                     if not video_url:
@@ -184,6 +248,8 @@ def download_audio(url: str, download_dir: str) -> str:
                 except Exception:
                     failed += 1
                     continue
+
+            _write_progress(playlist_tmp, total_tracks, total_tracks, "", "done")
 
             return json.dumps({
                 "type":   "playlist",
@@ -216,4 +282,4 @@ def download_audio(url: str, download_dir: str) -> str:
 
     except Exception as e:
         return f"ERROR: {str(e)}"
-        
+            
