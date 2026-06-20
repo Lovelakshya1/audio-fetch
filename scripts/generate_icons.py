@@ -43,7 +43,11 @@ ADAPTIVE_SIZES = {
 
 
 def parse_svg_rects(svg_path):
-    """Extract background rect (if any) and fill rects from a simple SVG file."""
+    """Extract background rect (if any) and fill rects from a simple SVG file.
+    Only walks DIRECT children of <svg> (and one level into <g> groups) —
+    root.iter() would double-visit <rect> elements nested inside <g>, since
+    it both yields the <g> (handled specially below) AND independently
+    yields every descendant <rect> a second time with no inherited fill."""
     tree = ET.parse(svg_path)
     root = tree.getroot()
     viewbox = root.get("viewBox", "0 0 512 512").split()
@@ -53,33 +57,38 @@ def parse_svg_rects(svg_path):
     bg = None
     bars = []
 
-    for elem in root.iter():
+    def handle_rect(elem, inherited_fill=None):
+        x = float(elem.get("x", 0))
+        y = float(elem.get("y", 0))
+        w = float(elem.get("width", 0))
+        h = float(elem.get("height", 0))
+        rx = float(elem.get("rx", 0))
+        fill = elem.get("fill") or inherited_fill or "#000000"
+
+        is_bg = (w >= vb_w * 0.9 and h >= vb_h * 0.9)
+        if is_bg:
+            return ("bg", {"fill": fill, "rx": rx})
+        else:
+            return ("bar", {"x": x, "y": y, "w": w, "h": h, "rx": rx, "fill": fill})
+
+    for elem in root:  # direct children ONLY, no recursive iter()
         tag = elem.tag.replace(SVG_NS, "")
         if tag == "rect":
-            x = float(elem.get("x", 0))
-            y = float(elem.get("y", 0))
-            w = float(elem.get("width", 0))
-            h = float(elem.get("height", 0))
-            rx = float(elem.get("rx", 0))
-            fill = elem.get("fill", "#000000")
-
-            is_bg = (w >= vb_w * 0.9 and h >= vb_h * 0.9)
-            if is_bg:
-                bg = {"fill": fill, "rx": rx}
+            kind, data = handle_rect(elem)
+            if kind == "bg":
+                bg = data
             else:
-                bars.append({"x": x, "y": y, "w": w, "h": h, "rx": rx, "fill": fill})
+                bars.append(data)
         elif tag == "g":
-            fill = elem.get("fill")
-            if fill:
-                for child in elem:
-                    ctag = child.tag.replace(SVG_NS, "")
-                    if ctag == "rect":
-                        x = float(child.get("x", 0))
-                        y = float(child.get("y", 0))
-                        w = float(child.get("width", 0))
-                        h = float(child.get("height", 0))
-                        rx = float(child.get("rx", 0))
-                        bars.append({"x": x, "y": y, "w": w, "h": h, "rx": rx, "fill": fill})
+            group_fill = elem.get("fill")
+            for child in elem:  # one level into the group, not deeper
+                ctag = child.tag.replace(SVG_NS, "")
+                if ctag == "rect":
+                    kind, data = handle_rect(child, inherited_fill=group_fill)
+                    if kind == "bg":
+                        bg = data
+                    else:
+                        bars.append(data)
 
     return vb_w, vb_h, bg, bars
 
